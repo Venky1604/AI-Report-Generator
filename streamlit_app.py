@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+from openai import OpenAI
 
 # =============================================================
 # Streamlit — Olist One-Click App (with optional OpenAI integration)
@@ -29,38 +30,23 @@ st.caption(
 # OpenAI helper
 # -------------------------------
 
-
 def call_openai(messages, model="gpt-4o-mini", temperature=0.2, api_key=None):
     """
-    Call OpenAI using the modern SDK if available, fallback to legacy openai.ChatCompletion.
+    Call OpenAI using the 1.x SDK (no legacy fallback).
     Returns the text content or raises on error.
     """
+    # Priority: explicit key, then env var
     api_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("No OpenAI API key provided. Set OPENAI_API_KEY or enter it in the sidebar.")
 
-    try:
-        # New SDK style (>=1.0.0)
-        from openai import OpenAI
-
-        client = OpenAI(api_key=api_key)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-        )
-        return resp.choices[0].message.content
-    except Exception:
-        # Legacy package interface
-        import openai as _openai
-
-        _openai.api_key = api_key
-        resp = _openai.ChatCompletion.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-        )
-        return resp["choices"][0]["message"]["content"]
+    client = OpenAI(api_key=api_key)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+    )
+    return resp.choices[0].message.content
 
 
 # -------------------------------
