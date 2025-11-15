@@ -1,8 +1,3 @@
-streamlit
-pandas
-numpy
-matplotlib
-openai
 
 # Olist AI Reports — CSV Build Outputs
 
