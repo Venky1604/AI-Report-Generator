@@ -1,7 +1,6 @@
 import io
 import json
 import os
-from datetime import datetime
 from typing import Dict, Tuple
 
 import numpy as np
@@ -10,62 +9,51 @@ import streamlit as st
 import matplotlib.pyplot as plt
 
 # =============================================================
-# Streamlit — Olist One‑Click App (with optional OpenAI integration)
+# Streamlit — Olist One-Click App (with optional OpenAI integration)
 # Upload CSVs → Clean/Join → KPIs & Charts → Factsheet JSON → AI Report
 # =============================================================
 # How to run locally:
 # 1) pip install streamlit pandas matplotlib numpy openai
-# 2) streamlit run app/streamlit_app.py
+# 2) streamlit run streamlit_app.py
 #    (Set OPENAI_API_KEY in your environment or paste it in the sidebar)
 # =============================================================
 
 st.set_page_config(page_title="Olist AI Reports", layout="wide")
-st.title("📦 Olist AI Reports — One‑Click ETL, KPIs, Charts & Factsheet")
-st.caption("Upload the nine Olist CSVs (from Kaggle) and get ready‑to‑use marts, plots, a compact factsheet, and an optional LLM report.")
+st.title("📦 Olist AI Reports — One-Click ETL, KPIs, Charts & Factsheet")
+st.caption(
+    "Upload the nine Olist CSVs (from Kaggle) and get ready-to-use marts, plots, "
+    "a compact factsheet, and an optional LLM report."
+)
 
 # -------------------------------
-# OpenAI helper (lazy import + dual API support)
+# OpenAI helper
 # -------------------------------
+
 
 def call_openai(messages, model="gpt-4o-mini", temperature=0.2, api_key=None):
-    """Call OpenAI using the modern SDK if available, fallback to legacy openai.ChatCompletion.
+    """
+    Call OpenAI using the modern SDK if available, fallback to legacy openai.ChatCompletion.
     Returns the text content or raises on error.
     """
-    # Priority: explicit key → st.secrets → env
-    api_key = api_key or st.secrets.get("OPENAI_API_KEY", None) or os.environ.get("OPENAI_API_KEY")
+    api_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("No OpenAI API key provided. Add it in the sidebar or set OPENAI_API_KEY.")
+        raise RuntimeError("No OpenAI API key provided. Set OPENAI_API_KEY or enter it in the sidebar.")
 
     try:
-        # New SDK (>=1.0) style
+        # New SDK style (>=1.0.0)
         from openai import OpenAI
+
         client = OpenAI(api_key=api_key)
-        try:
-            # Preferred modern endpoint
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-            )
-            return resp.choices[0].message.content
-        except Exception:
-            # Fallback to responses API if needed
-            try:
-                resp = client.responses.create(
-                    model=model,
-                    input=messages,
-                    temperature=temperature,
-                )
-                # unify output
-                if hasattr(resp, "output_text"):
-                    return resp.output_text
-                elif hasattr(resp, "content") and resp.content and hasattr(resp.content[0], "text"):
-                    return resp.content[0].text
-            except Exception as e2:
-                raise e2
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+        )
+        return resp.choices[0].message.content
     except Exception:
         # Legacy package interface
         import openai as _openai
+
         _openai.api_key = api_key
         resp = _openai.ChatCompletion.create(
             model=model,
@@ -78,6 +66,7 @@ def call_openai(messages, model="gpt-4o-mini", temperature=0.2, api_key=None):
 # -------------------------------
 # Upload & Parsing Helpers
 # -------------------------------
+
 REQUIRED_FILES = {
     "olist_orders_dataset.csv": "orders",
     "olist_order_items_dataset.csv": "items",
@@ -86,7 +75,7 @@ REQUIRED_FILES = {
     "olist_products_dataset.csv": "products",
     "olist_customers_dataset.csv": "customers",
     "olist_geolocation_dataset.csv": "geolocation",  # optional for maps
-    "olist_sellers_dataset.csv": "sellers",          # optional for item-level joins
+    "olist_sellers_dataset.csv": "sellers",  # optional for item-level joins
     "product_category_name_translation.csv": "translation",
 }
 
@@ -122,13 +111,13 @@ def load_inputs() -> Dict[str, pd.DataFrame]:
 
     df_orders = _read_csv(uploads["orders"], parse_dates=ORDER_DATE_COLS)
     df_reviews = _read_csv(uploads["reviews"], parse_dates=REVIEW_DATE_COLS)
-    df_items = _read_csv(uploads["items"])  # numeric cast later
-    df_pays = _read_csv(uploads["payments"])  # numeric cast later
-    df_products = _read_csv(uploads["products"])  # join category translations
-    df_custs = _read_csv(uploads["customers"])  # merge for city/state
-    df_geos = _read_csv(uploads["geolocation"])  # not mandatory for KPIs
-    df_sellers = _read_csv(uploads["sellers"])  # optional
-    df_trans = _read_csv(uploads["translation"])  # product_category_name -> english
+    df_items = _read_csv(uploads["items"])
+    df_pays = _read_csv(uploads["payments"])
+    df_products = _read_csv(uploads["products"])
+    df_custs = _read_csv(uploads["customers"])
+    df_geos = _read_csv(uploads["geolocation"])
+    df_sellers = _read_csv(uploads["sellers"])
+    df_trans = _read_csv(uploads["translation"])
 
     return {
         "orders": df_orders,
@@ -148,7 +137,7 @@ def dedup(df: pd.DataFrame, name: str) -> pd.DataFrame:
     df2 = df.drop_duplicates()
     after = len(df2)
     if before != after:
-        st.write(f"✅ De‑dup **{name}**: removed {before-after} rows")
+        st.write(f"✅ De-dup **{name}**: removed {before-after} rows")
     return df2
 
 
@@ -163,7 +152,9 @@ def integrity_report(child_df, child_key, parent_df, parent_key, label) -> int:
 
 
 def build_marts(dfs: Dict[str, pd.DataFrame]):
-    """Return (monthly, category_perf, fact_orders, dim_customer, dim_product)."""
+    """
+    Return (monthly, category_perf, fact_orders, dim_customer, dim_product).
+    """
     orders = dedup(dfs["orders"], "orders")
     items = dedup(dfs["items"], "order_items")
     pays = dedup(dfs["payments"], "payments")
@@ -198,7 +189,7 @@ def build_marts(dfs: Dict[str, pd.DataFrame]):
     products = products.rename(columns={"product_category_name_english": "category_en"})
     dim_product = products[["product_id", "product_category_name", "category_en"]].copy()
 
-    # Order‑level features
+    # Order-level features
     items["line_revenue"] = items["price"]
     order_rev = items.groupby("order_id", as_index=False).agg(
         revenue=("line_revenue", "sum"),
@@ -207,16 +198,26 @@ def build_marts(dfs: Dict[str, pd.DataFrame]):
     freight = items.groupby("order_id", as_index=False).agg(
         freight_value=("freight_value", "sum")
     )
-    pay_tot = pays.groupby("order_id", as_index=False)["payment_value"].sum().rename(columns={"payment_value": "payment_value_total"})
+    pay_tot = (
+        pays.groupby("order_id", as_index=False)["payment_value"]
+        .sum()
+        .rename(columns={"payment_value": "payment_value_total"})
+    )
 
     ordx = (
         orders.merge(order_rev, on="order_id", how="left")
-              .merge(freight, on="order_id", how="left")
-              .merge(pay_tot, on="order_id", how="left")
-              .merge(custs[["customer_id", "customer_unique_id", "customer_city", "customer_state"]], on="customer_id", how="left")
+        .merge(freight, on="order_id", how="left")
+        .merge(pay_tot, on="order_id", how="left")
+        .merge(
+            custs[["customer_id", "customer_unique_id", "customer_city", "customer_state"]],
+            on="customer_id",
+            how="left",
+        )
     )
 
-    ordx["delivery_days"] = (ordx["order_delivered_customer_date"] - ordx["order_purchase_timestamp"]).dt.days
+    ordx["delivery_days"] = (
+        ordx["order_delivered_customer_date"] - ordx["order_purchase_timestamp"]
+    ).dt.days
     ordx["order_month"] = ordx["order_purchase_timestamp"].dt.to_period("M").astype(str)
     ordx["freight_share"] = ordx["freight_value"] / (ordx["revenue"].fillna(0) + 1e-9)
 
@@ -224,7 +225,8 @@ def build_marts(dfs: Dict[str, pd.DataFrame]):
     has_est = ordx["order_estimated_delivery_date"].notna() & ordx["order_delivered_customer_date"].notna()
     ordx["is_late"] = False
     ordx.loc[has_est, "is_late"] = (
-        ordx.loc[has_est, "order_delivered_customer_date"] > ordx.loc[has_est, "order_estimated_delivery_date"]
+        ordx.loc[has_est, "order_delivered_customer_date"]
+        > ordx.loc[has_est, "order_estimated_delivery_date"]
     )
     no_est = ~has_est & ordx["delivery_days"].notna()
     if not np.isnan(q90):
@@ -233,7 +235,9 @@ def build_marts(dfs: Dict[str, pd.DataFrame]):
     delivered = ordx[ordx["order_status"] == "delivered"].copy()
 
     # Customer features & cohorts
-    first_order = delivered.groupby("customer_unique_id")["order_purchase_timestamp"].min().rename("first_order_date")
+    first_order = delivered.groupby("customer_unique_id")["order_purchase_timestamp"].min().rename(
+        "first_order_date"
+    )
     cust_feat = delivered.groupby("customer_unique_id").agg(
         orders_cnt=("order_id", "nunique"),
         last_order=("order_purchase_timestamp", "max"),
@@ -243,7 +247,7 @@ def build_marts(dfs: Dict[str, pd.DataFrame]):
 
     dim_customer = (
         custs.merge(cust_feat.reset_index(), on="customer_unique_id", how="left")
-             .rename(columns={"customer_city": "city", "customer_state": "state"})
+        .rename(columns={"customer_city": "city", "customer_state": "state"})
     )
 
     # Monthly KPIs
@@ -266,7 +270,7 @@ def build_marts(dfs: Dict[str, pd.DataFrame]):
     # Category performance
     items_cat = (
         items.merge(products[["product_id", "category_en"]], on="product_id", how="left")
-             .merge(orders[["order_id", "order_purchase_timestamp", "order_status"]], on="order_id", how="left")
+        .merge(orders[["order_id", "order_purchase_timestamp", "order_status"]], on="order_id", how="left")
     )
     items_cat = items_cat[items_cat["order_status"] == "delivered"].copy()
     items_cat["order_month"] = items_cat["order_purchase_timestamp"].dt.to_period("M").astype(str)
@@ -289,29 +293,44 @@ def build_factsheet(monthly: pd.DataFrame) -> Dict:
         "aov": [float(x) if pd.notnull(x) else None for x in m["aov"].round(2)],
         "avg_delivery_days": [float(x) if pd.notnull(x) else None for x in m["avg_delivery_days"].round(2)],
         "late_ratio": [float(x) if pd.notnull(x) else None for x in m["late_ratio"].round(3)],
-        "avg_review_score": [float(x) if pd.notnull(x) else None for x in m["avg_review_score"].round(2)],
+        "avg_review_score": [
+            float(x) if pd.notnull(x) else None for x in m["avg_review_score"].round(2)
+        ],
     }
     return facts
 
 
 def build_top_categories_growth(category_perf: pd.DataFrame, k: int = 5) -> pd.DataFrame:
-    """Compute last-2-month growth by category and return top-k rows with columns: category_en, last_month, prev_month, growth."""
+    """
+    Compute last-2-month growth by category and return top-k rows with:
+    category_en, prev_month, last_month, growth, period_prev, period_last
+    """
     if category_perf.empty:
-        return pd.DataFrame(columns=["category_en", "last_month", "prev_month", "growth"])
+        return pd.DataFrame(
+            columns=["category_en", "prev_month", "last_month", "growth", "period_prev", "period_last"]
+        )
+
     df = category_perf.copy()
     df = df.sort_values("order_month")
-    last_two = df["order_month"].dropna().unique()
-    if len(last_two) < 2:
-        return pd.DataFrame(columns=["category_en", "last_month", "prev_month", "growth"])
-    last, prev = last_two[-1], last_two[-2]
-    piv = df[df["order_month"].isin([last, prev])].pivot_table(
-        index="category_en", columns="order_month", values="revenue", aggfunc="sum"
-    ).fillna(0)
-    piv["growth"] = piv.get(last, 0) - piv.get(prev, 0)
+    months = df["order_month"].dropna().unique()
+    if len(months) < 2:
+        return pd.DataFrame(
+            columns=["category_en", "prev_month", "last_month", "growth", "period_prev", "period_last"]
+        )
+
+    prev, last = months[-2], months[-1]
+    piv = (
+        df[df["order_month"].isin([prev, last])]
+        .pivot_table(index="category_en", columns="order_month", values="revenue", aggfunc="sum")
+        .fillna(0)
+    )
+
+    piv["growth"] = piv[last] - piv[prev]
     out = piv.sort_values("growth", ascending=False).head(k).reset_index()
-    out = out.rename(columns={last: "last_month", prev: "prev_month"})
-    out["period_last"] = last
+    out = out.rename(columns={prev: "prev_month", last: "last_month"})
     out["period_prev"] = prev
+    out["period_last"] = last
+
     return out[["category_en", "prev_month", "last_month", "growth", "period_prev", "period_last"]]
 
 
@@ -319,37 +338,101 @@ def make_llm_prompt(facts: Dict, top_growth: pd.DataFrame) -> str:
     top_list = []
     if not top_growth.empty:
         for _, r in top_growth.iterrows():
-            top_list.append({
-                "category": str(r["category_en"]) if pd.notnull(r["category_en"]) else "",
-                "prev_revenue": float(r["prev_month"]) if pd.notnull(r["prev_month"]) else 0.0,
-                "last_revenue": float(r["last_month"]) if pd.notnull(r["last_month"]) else 0.0,
-                "growth": float(r["growth"]) if pd.notnull(r["growth"]) else 0.0,
-                "period_prev": r["period_prev"],
-                "period_last": r["period_last"],
-            })
+            top_list.append(
+                {
+                    "category": str(r["category_en"]) if pd.notnull(r["category_en"]) else "",
+                    "prev_revenue": float(r["prev_month"]) if pd.notnull(r["prev_month"]) else 0.0,
+                    "last_revenue": float(r["last_month"]) if pd.notnull(r["last_month"]) else 0.0,
+                    "growth": float(r["growth"]) if pd.notnull(r["growth"]) else 0.0,
+                    "period_prev": r["period_prev"],
+                    "period_last": r["period_last"],
+                }
+            )
+
+    instructions = (
+        "You are a Business Analyst. Using the JSON facts (KPIs for the last 3 months) and the top 5 "
+        "categories by revenue growth (if provided), write a concise monthly report with: "
+        "(1) Executive Summary with MoM deltas, "
+        "(2) Sales & Category Performance, "
+        "(3) Operations (delivery, late%), "
+        "(4) Customer Voice (reviews/sentiment), "
+        "(5) three actionable recommendations. "
+        "Keep it under 250 words, use bullet points, and quantify every claim."
+    )
+
     payload = {
         "facts": facts,
         "top_categories_growth": top_list,
-        "instructions": (
-            "You are a Business Analyst. Using the JSON facts (KPIs for the last 3 months) and the top 5 categories by revenue growth (if provided), "
-            "write a concise monthly report with: (1) Executive Summary with MoM deltas, (2) Sales & Category Performance, (3) Operations (delivery, late%), "
-            "(4) Customer Voice (reviews/sentiment), (5) three actionable recommendations. Keep it under 250 words, use bullet points, and quantify every claim."
-        ),
+        "instructions": instructions,
     }
     return json.dumps(payload, indent=2)
+
+
+def auto_report_from_facts(facts: Dict) -> str:
+    p = facts.get("periods", [])
+    rev = facts.get("revenue", [])
+    ords = facts.get("orders", [])
+    aov = facts.get("aov", [])
+    dd = facts.get("avg_delivery_days", [])
+    late = facts.get("late_ratio", [])
+    rs = facts.get("avg_review_score", [])
+
+    def delta(lst):
+        if len(lst) >= 2 and lst[-1] is not None and lst[-2] is not None:
+            return lst[-1] - lst[-2]
+        return None
+
+    def fmt_pct(x):
+        return f"{x*100:.1f}%" if x is not None else "—"
+
+    def fmt(x):
+        return f"{x:,.2f}" if isinstance(x, (int, float)) and x is not None else "—"
+
+    lines = []
+    lines.append("**Executive Summary (last 3 months)**")
+    lines.append(f"- Periods: {', '.join(p) if p else '—'}")
+    if rev:
+        lines.append(
+            f"- Revenue (last): ${fmt(rev[-1])} (MoM Δ: {fmt(delta(rev))}). "
+            f"Orders: {fmt(ords[-1])}; AOV: ${fmt(aov[-1])}."
+        )
+    if dd:
+        lines.append(
+            f"- Operations: Avg delivery days {fmt(dd[-1])} (MoM Δ: {fmt(delta(dd))}); "
+            f"Late% {fmt_pct(late[-1]) if late else '—'}."
+        )
+    if rs:
+        lines.append(
+            f"- Customer Voice: Avg review score {fmt(rs[-1])} (MoM Δ: {fmt(delta(rs))})."
+        )
+
+    lines.append("")
+    lines.append("**Sales & Category Performance** — see charts for top categories.")
+    lines.append("**Operations** — reduce slow lanes, watch freight share.")
+    lines.append("**Customer Voice** — sample low-star reviews to spot themes.")
+    lines.append("**Recommendations** — double-down on growers; fix late lanes; boost review prompts.")
+
+    return "\n".join(lines)
 
 
 # -------------------------------
 # Main App Flow
 # -------------------------------
 
-# Sidebar: API key & model
 with st.sidebar:
     st.header("🔐 OpenAI (optional)")
-    user_api_key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...", help="If empty, the app will try st.secrets or environment variable OPENAI_API_KEY.")
-    model = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"], index=0)
+    user_api_key = st.text_input(
+        "OpenAI API Key",
+        type="password",
+        placeholder="sk-...",
+        help="If empty, the app will use the OPENAI_API_KEY environment variable.",
+    )
+    model = st.selectbox(
+        "Model",
+        ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
+        index=0,
+    )
     temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
-
 
 dfs = load_inputs()
 if not dfs:
@@ -361,15 +444,40 @@ with st.spinner("Building marts and charts…"):
 st.subheader("2) Overview — Monthly KPIs")
 st.dataframe(monthly.sort_values("order_month").reset_index(drop=True))
 
-# Downloads
-st.download_button("⬇️ Download monthly_kpis.csv", data=monthly.to_csv(index=False), file_name="monthly_kpis.csv", mime="text/csv")
-st.download_button("⬇️ Download category_perf.csv", data=category_perf.to_csv(index=False), file_name="category_perf.csv", mime="text/csv")
-st.download_button("⬇️ Download fact_orders.csv", data=fact_orders.to_csv(index=False), file_name="fact_orders.csv", mime="text/csv")
-st.download_button("⬇️ Download dim_customer.csv", data=dim_customer.to_csv(index=False), file_name="dim_customer.csv", mime="text/csv")
-st.download_button("⬇️ Download dim_product.csv", data=dim_product.to_csv(index=False), file_name="dim_product.csv", mime="text/csv")
+# Downloads for marts/dims
+st.download_button(
+    "⬇️ Download monthly_kpis.csv",
+    data=monthly.to_csv(index=False),
+    file_name="monthly_kpis.csv",
+    mime="text/csv",
+)
+st.download_button(
+    "⬇️ Download category_perf.csv",
+    data=category_perf.to_csv(index=False),
+    file_name="category_perf.csv",
+    mime="text/csv",
+)
+st.download_button(
+    "⬇️ Download fact_orders.csv",
+    data=fact_orders.to_csv(index=False),
+    file_name="fact_orders.csv",
+    mime="text/csv",
+)
+st.download_button(
+    "⬇️ Download dim_customer.csv",
+    data=dim_customer.to_csv(index=False),
+    file_name="dim_customer.csv",
+    mime="text/csv",
+)
+st.download_button(
+    "⬇️ Download dim_product.csv",
+    data=dim_product.to_csv(index=False),
+    file_name="dim_product.csv",
+    mime="text/csv",
+)
 
 # -------------------------------
-# Charts (matplotlib)
+# Charts
 # -------------------------------
 
 st.subheader("3) Charts")
@@ -405,11 +513,18 @@ if not monthly.empty:
 if not category_perf.empty:
     st.markdown("**Top 5 Categories by Total Revenue**")
     top5 = (
-        category_perf.groupby("category_en")["revenue"].sum().sort_values(ascending=False).head(5).index.tolist()
+        category_perf.groupby("category_en")["revenue"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(5)
+        .index.tolist()
     )
-    cat_pvt = category_perf[category_perf["category_en"].isin(top5)].pivot_table(
-        index="order_month", columns="category_en", values="revenue", aggfunc="sum"
-    ).fillna(0).sort_index()
+    cat_pvt = (
+        category_perf[category_perf["category_en"].isin(top5)]
+        .pivot_table(index="order_month", columns="category_en", values="revenue", aggfunc="sum")
+        .fillna(0)
+        .sort_index()
+    )
 
     fig = plt.figure()
     for col in cat_pvt.columns:
@@ -423,84 +538,62 @@ if not category_perf.empty:
     st.pyplot(fig)
 
 # -------------------------------
-# Factsheet & Reports (rules + OpenAI)
+# Factsheet & Reports
 # -------------------------------
 
 st.subheader("4) LLM Factsheet + Reports")
-facts = build_factsheet(monthly)
 
+facts = build_factsheet(monthly)
 facts_json = json.dumps(facts, indent=2)
+
 st.markdown("**Factsheet JSON (last 3 months):**")
 st.code(facts_json, language="json")
-st.download_button("⬇️ Download monthly_facts.json", data=facts_json.encode("utf-8"), file_name="monthly_facts.json", mime="application/json")
+st.download_button(
+    "⬇️ Download monthly_facts.json",
+    data=facts_json.encode("utf-8"),
+    file_name="monthly_facts.json",
+    mime="application/json",
+)
 
-# Rule‑based mini report (offline)
-
-def auto_report_from_facts(facts: Dict) -> str:
-    p = facts.get("periods", [])
-    rev = facts.get("revenue", [])
-    ords = facts.get("orders", [])
-    aov = facts.get("aov", [])
-    dd = facts.get("avg_delivery_days", [])
-    late = facts.get("late_ratio", [])
-    rs = facts.get("avg_review_score", [])
-
-    def delta(lst):
-        if len(lst) >= 2 and lst[-1] is not None and lst[-2] is not None:
-            return (lst[-1] - lst[-2])
-        return None
-
-    def fmt_pct(x):
-        return f"{x*100:.1f}%" if x is not None else "—"
-
-    def fmt(x):
-        return f"{x:,.2f}" if isinstance(x, (int, float)) and x is not None else "—"
-
-lines = []
-lines.append("**Executive Summary (last 3 months)**")
-lines.append(f"- Periods: {', '.join(p) if p else '—'}")
-if rev:
-    lines.append(f"- Revenue (last): ${fmt(rev[-1])} (MoM Δ: {fmt(delta(rev))}). Orders: {fmt(ords[-1])}; AOV: ${fmt(aov[-1])}.")
-if dd:
-    lines.append(f"- Operations: Avg delivery days {fmt(dd[-1])} (MoM Δ: {fmt(delta(dd))}); Late% {fmt_pct(late[-1]) if late else '—'} (Δ {fmt_pct(delta(late)) if late else '—'}).")
-if rs:
-    lines.append(f"- Customer Voice: Avg review score {fmt(rs[-1])} (MoM Δ: {fmt(delta(rs))}).")
-
-lines.append("\n**Sales & Category Performance** — see charts for top categories.")
-lines.append("**Operations** — reduce slow lanes, watch freight share.")
-lines.append("**Customer Voice** — sample low-star reviews to spot themes.")
-lines.append("**Recommendations** — double-down on growers; fix late lanes; boost review prompts.")
-
-return "\n".join(lines)
-
-st.markdown("**Auto‑generated Monthly Report (rule‑based, no API):**")
+st.markdown("**Auto-generated Monthly Report (rule-based, no API):**")
 st.markdown(auto_report_from_facts(facts))
 
-# OpenAI Report
 st.markdown("---")
 st.markdown("### ✨ Generate AI Report with OpenAI (optional)")
 
 top_growth = build_top_categories_growth(category_perf, k=5)
 prompt_json = make_llm_prompt(facts, top_growth)
+
 st.markdown("**Prompt payload sent to the model:**")
 st.code(prompt_json, language="json")
 
 if st.button("🚀 Generate with OpenAI"):
     try:
         messages = [
-            {"role": "system", "content": "You are a precise, data‑grounded Business Analyst."},
-            {"role": "user", "content": (
-                "Using the JSON below, write a concise monthly report: (1) Executive Summary with MoM deltas, "
-                "(2) Sales & Category Performance, (3) Operations (delivery, late%), (4) Customer Voice, (5) three actionable recommendations. "
-                "Keep it under 250 words, use bullet points, and quantify every claim.
-
-JSON:
-" + prompt_json
-            )},
+            {"role": "system", "content": "You are a precise, data-grounded Business Analyst."},
+            {
+                "role": "user",
+                "content": (
+                    "Using the JSON below, write a concise monthly report: "
+                    "(1) Executive Summary with MoM deltas, "
+                    "(2) Sales & Category Performance, "
+                    "(3) Operations (delivery, late%), "
+                    "(4) Customer Voice, "
+                    "(5) three actionable recommendations. "
+                    "Keep it under 250 words, use bullet points, and quantify every claim.\n\n"
+                    "JSON:\n" + prompt_json
+                ),
+            },
         ]
-        ai_text = call_openai(messages, model=model, temperature=temperature, api_key=user_api_key)
+        key_to_use = user_api_key or os.environ.get("OPENAI_API_KEY")
+        ai_text = call_openai(messages, model=model, temperature=temperature, api_key=key_to_use)
         st.success("OpenAI report generated!")
         st.markdown(ai_text)
-        st.download_button("⬇️ Download AI Report (Markdown)", data=ai_text.encode("utf-8"), file_name="ai_report.md", mime="text/markdown")
+        st.download_button(
+            "⬇️ Download AI Report (Markdown)",
+            data=ai_text.encode("utf-8"),
+            file_name="ai_report.md",
+            mime="text/markdown",
+        )
     except Exception as e:
         st.error(f"OpenAI call failed: {e}")
