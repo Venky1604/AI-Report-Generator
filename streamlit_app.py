@@ -456,22 +456,22 @@ def auto_report_from_facts(facts: Dict) -> str:
     def fmt(x):
         return f"{x:,.2f}" if isinstance(x, (int, float)) and x is not None else "—"
 
-    lines = []
-    lines.append("**Executive Summary (last 3 months)**")
-    lines.append(f"- Periods: {', '.join(p) if p else '—'}")
-    if rev:
-        lines.append(f"- Revenue (last): ${fmt(rev[-1])} (MoM Δ: {fmt(delta(rev))}). Orders: {fmt(ords[-1])}; AOV: ${fmt(aov[-1])}.")
-    if dd:
-        lines.append(f"- Operations: Avg delivery days {fmt(dd[-1])} (MoM Δ: {fmt(delta(dd))}); Late% {fmt_pct(late[-1]) if late else '—'} (Δ {fmt_pct(delta(late)) if late else '—'}).")
-    if rs:
-        lines.append(f"- Customer Voice: Avg review score {fmt(rs[-1])} (MoM Δ: {fmt(delta(rs))}).")
-    lines.append("
-**Sales & Category Performance** — see charts for top categories.")
-    lines.append("**Operations** — reduce slow lanes, watch freight share.")
-    lines.append("**Customer Voice** — sample low‑star reviews to spot themes.")
-    lines.append("**Recommendations** — double‑down on growers; fix late lanes; boost review prompts.")
-    return "
-".join(lines)
+lines = []
+lines.append("**Executive Summary (last 3 months)**")
+lines.append(f"- Periods: {', '.join(p) if p else '—'}")
+if rev:
+    lines.append(f"- Revenue (last): ${fmt(rev[-1])} (MoM Δ: {fmt(delta(rev))}). Orders: {fmt(ords[-1])}; AOV: ${fmt(aov[-1])}.")
+if dd:
+    lines.append(f"- Operations: Avg delivery days {fmt(dd[-1])} (MoM Δ: {fmt(delta(dd))}); Late% {fmt_pct(late[-1]) if late else '—'} (Δ {fmt_pct(delta(late)) if late else '—'}).")
+if rs:
+    lines.append(f"- Customer Voice: Avg review score {fmt(rs[-1])} (MoM Δ: {fmt(delta(rs))}).")
+
+lines.append("\n**Sales & Category Performance** — see charts for top categories.")
+lines.append("**Operations** — reduce slow lanes, watch freight share.")
+lines.append("**Customer Voice** — sample low-star reviews to spot themes.")
+lines.append("**Recommendations** — double-down on growers; fix late lanes; boost review prompts.")
+
+return "\n".join(lines)
 
 st.markdown("**Auto‑generated Monthly Report (rule‑based, no API):**")
 st.markdown(auto_report_from_facts(facts))
