@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-from openai import OpenAI
+import google.generativeai as genai
 
 # =============================================================
 # Streamlit — Olist One-Click App (with optional OpenAI integration)
@@ -30,23 +30,28 @@ st.caption(
 # OpenAI helper
 # -------------------------------
 
-def call_openai(messages, model="gpt-4o-mini", temperature=0.2, api_key=None):
+def call_gemini(prompt: str, model: str = "gemini-1.5-flash", temperature: float = 0.2, api_key: str = None) -> str:
     """
-    Call OpenAI using the 1.x SDK (no legacy fallback).
+    Call Google Gemini using google-generativeai.
     Returns the text content or raises on error.
     """
-    # Priority: explicit key, then env var
-    api_key = api_key or os.environ.get("OPENAI_API_KEY")
+    # Priority: explicit key → GEMINI_API_KEY → GOOGLE_API_KEY
+    api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        raise RuntimeError("No OpenAI API key provided. Set OPENAI_API_KEY or enter it in the sidebar.")
+        raise RuntimeError(
+            "No Gemini API key provided. Set GEMINI_API_KEY/GOOGLE_API_KEY or enter it in the sidebar."
+        )
 
-    client = OpenAI(api_key=api_key)
-    resp = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
+    genai.configure(api_key=api_key)
+
+    model_obj = genai.GenerativeModel(model)
+    resp = model_obj.generate_content(
+        prompt,
+        generation_config={"temperature": temperature},
     )
-    return resp.choices[0].message.content
+
+    # resp.text is the combined text output
+    return resp.text
 
 
 # -------------------------------
@@ -406,16 +411,16 @@ def auto_report_from_facts(facts: Dict) -> str:
 # -------------------------------
 
 with st.sidebar:
-    st.header("🔐 OpenAI (optional)")
-    user_api_key = st.text_input(
-        "OpenAI API Key",
+    st.header("🔐 Gemini (Google AI, optional)")
+    user_gemini_key = st.text_input(
+        "Gemini API Key",
         type="password",
-        placeholder="sk-...",
-        help="If empty, the app will use the OPENAI_API_KEY environment variable.",
+        placeholder="AIza...",
+        help="Get one free at ai.google.dev; or set GEMINI_API_KEY / GOOGLE_API_KEY in environment.",
     )
-    model = st.selectbox(
-        "Model",
-        ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
+    gemini_model = st.selectbox(
+        "Gemini model",
+        ["gemini-1.5-flash", "gemini-1.5-pro"],
         index=0,
     )
     temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
@@ -545,41 +550,44 @@ st.markdown("**Auto-generated Monthly Report (rule-based, no API):**")
 st.markdown(auto_report_from_facts(facts))
 
 st.markdown("---")
-st.markdown("### ✨ Generate AI Report with OpenAI (optional)")
+st.markdown("### ✨ Generate AI Report with Gemini (optional)")
 
 top_growth = build_top_categories_growth(category_perf, k=5)
 prompt_json = make_llm_prompt(facts, top_growth)
 
-st.markdown("**Prompt payload sent to the model:**")
+st.markdown("**Prompt payload sent to Gemini:**")
 st.code(prompt_json, language="json")
 
-if st.button("🚀 Generate with OpenAI"):
+if st.button("🚀 Generate with Gemini"):
     try:
-        messages = [
-            {"role": "system", "content": "You are a precise, data-grounded Business Analyst."},
-            {
-                "role": "user",
-                "content": (
-                    "Using the JSON below, write a concise monthly report: "
-                    "(1) Executive Summary with MoM deltas, "
-                    "(2) Sales & Category Performance, "
-                    "(3) Operations (delivery, late%), "
-                    "(4) Customer Voice, "
-                    "(5) three actionable recommendations. "
-                    "Keep it under 250 words, use bullet points, and quantify every claim.\n\n"
-                    "JSON:\n" + prompt_json
-                ),
-            },
-        ]
-        key_to_use = user_api_key or os.environ.get("OPENAI_API_KEY")
-        ai_text = call_openai(messages, model=model, temperature=temperature, api_key=key_to_use)
-        st.success("OpenAI report generated!")
+        gemini_prompt = (
+            "You are a precise, data-grounded Business Analyst.\n\n"
+            "Using the JSON below, write a concise monthly report with:\n"
+            "1. Executive Summary with MoM deltas,\n"
+            "2. Sales & Category Performance,\n"
+            "3. Operations (delivery, late%),\n"
+            "4. Customer Voice,\n"
+            "5. Three actionable recommendations.\n\n"
+            "Keep it under 250 words, use bullet points, and quantify every claim.\n\n"
+            "JSON:\n"
+            f"{prompt_json}"
+        )
+
+        gemini_key = user_gemini_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        ai_text = call_gemini(
+            gemini_prompt,
+            model=gemini_model,
+            temperature=temperature,
+            api_key=gemini_key,
+        )
+
+        st.success("Gemini report generated!")
         st.markdown(ai_text)
         st.download_button(
             "⬇️ Download AI Report (Markdown)",
             data=ai_text.encode("utf-8"),
-            file_name="ai_report.md",
+            file_name="ai_report_gemini.md",
             mime="text/markdown",
         )
     except Exception as e:
-        st.error(f"OpenAI call failed: {e}")
+        st.error(f"Gemini call failed: {e}")
